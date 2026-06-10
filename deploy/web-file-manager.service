@@ -1,14 +1,18 @@
 [Unit]
-Description=Web File Manager
+Description=Web File Manager (Htkis_shareweb)
 After=network.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=debian
-WorkingDirectory=/opt/web-file-manager
-ExecStart=/opt/web-file-manager/web-file-manager /opt/web-file-manager/config.toml
-Restart=on-failure
+WorkingDirectory=/home/debian/shareweb
+ExecStartPre=/bin/mkdir -p /home/debian/shareweb/data /tmp/upload
+ExecStart=/home/debian/shareweb/target/release/web-file-manager /home/debian/shareweb/config.toml
+Restart=always
 RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=10
 Environment=RUST_LOG=info
 
 [Install]
