@@ -149,8 +149,16 @@ phase4_samba() {
         echo -e "$SAMBA_PASS\n$SAMBA_PASS" | smbpasswd -a "$SAMBA_USER" -s
     fi
 
-    if ! grep -q '\[share\]' /etc/samba/smb.conf; then
-        cat >> /etc/samba/smb.conf << SMBCONF
+    # 覆盖 smb.conf：只保留 [share] 共享，移除默认的 [homes]/[printers]/[print$]
+    cat > /etc/samba/smb.conf << SMBCONF
+[global]
+   workgroup = WORKGROUP
+   server string = Samba Server
+   server role = standalone server
+   log file = /var/log/samba/log.%m
+   max log size = 50
+   dns proxy = no
+   usershare allow guests = no
 
 [share]
    path = $SHARE_DIR
@@ -163,7 +171,6 @@ phase4_samba() {
    create mask = 0664
    directory mask = 0775
 SMBCONF
-    fi
 
     systemctl enable smbd nmbd
     systemctl restart smbd nmbd
