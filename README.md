@@ -57,6 +57,7 @@ shareweb/
 │   │   └── components/         # 通用组件
 │   └── dist/                   # 构建产物
 ├── deploy/                     # 部署配置
+│   ├── deploy.sh               # 一键部署脚本（Debian 13）
 │   ├── web-file-manager.service # systemd 服务文件
 │   └── nginx.conf              # Nginx 配置模板
 ├── config.toml                 # 应用配置文件
@@ -88,7 +89,32 @@ npm install
 npm run dev
 ```
 
-### 生产部署
+### 一键部署（推荐，适用于全新 Debian 13）
+
+```bash
+# 克隆项目
+git clone https://github.com/wujupeng/shareweb.git
+cd shareweb
+
+# 以 root 执行一键部署脚本
+sudo bash deploy/deploy.sh
+```
+
+脚本自动完成 10 个阶段：
+1. 安装系统基础依赖（curl/git/nginx/sqlite3/samba 等）
+2. 安装 Rust 工具链（rustup，需 1.88+）
+3. 安装 Node.js（v20.x）
+4. 配置 SMB 共享（/mnt/share，smbpasswd）
+5. 获取源码并编译后端 + 构建前端
+6. 生成应用配置（config.toml，随机 jwt_secret）
+7. 配置 systemd 服务（Restart=always，断电自动恢复）
+8. 配置 Nginx 反向代理（端口 88 → 8888）
+9. 配置 UFW 防火墙规则
+10. 配置 IP 变化自动检测（cron 每5分钟）
+
+部署完成后访问 `http://<服务器IP>:88`，管理员账号 `admin / Admin@2026`。
+
+### 手动生产部署
 
 ```bash
 # 编译后端
