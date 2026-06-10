@@ -40,11 +40,36 @@ check_debian13() {
     fi
 }
 
+setup_env() {
+    export DEBIAN_FRONTEND=noninteractive
+    export RUSTUP_DIST_SERVER="https://mirrors.tuna.tsinghua.edu.cn/rustup"
+    export RUSTUP_UPDATE_ROOT="https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup"
+}
+
 #=============================================================
 # 阶段1: 系统基础依赖
 #=============================================================
 phase1_system_deps() {
     info "===== 阶段1: 安装系统基础依赖 ====="
+
+    export DEBIAN_FRONTEND=noninteractive
+
+    # 修复 apt 源: 注释掉 cdrom 源，确保网络源（优先使用国内镜像）
+    if grep -q '^deb cdrom:' /etc/apt/sources.list 2>/dev/null; then
+        info "检测到 cdrom 源，切换为清华镜像源..."
+        cat > /etc/apt/sources.list << 'APTEOF'
+deb https://mirrors.tuna.tsinghua.edu.cn/debian trixie main contrib non-free-firmware
+deb https://mirrors.tuna.tsinghua.edu.cn/debian trixie-updates main contrib non-free-firmware
+deb https://mirrors.tuna.tsinghua.edu.cn/debian-security trixie-security main contrib non-free-firmware
+APTEOF
+    elif ! grep -q '^deb http' /etc/apt/sources.list 2>/dev/null && ! grep -q '^deb https' /etc/apt/sources.list 2>/dev/null; then
+        info "未检测到网络源，添加清华镜像源..."
+        cat >> /etc/apt/sources.list << 'APTEOF'
+deb https://mirrors.tuna.tsinghua.edu.cn/debian trixie main contrib non-free-firmware
+deb https://mirrors.tuna.tsinghua.edu.cn/debian trixie-updates main contrib non-free-firmware
+deb https://mirrors.tuna.tsinghua.edu.cn/debian-security trixie-security main contrib non-free-firmware
+APTEOF
+    fi
 
     apt-get update -qq
 
@@ -70,13 +95,15 @@ phase1_system_deps() {
 phase2_rust() {
     info "===== 阶段2: 安装 Rust ====="
 
-    if command -v rustc &>/dev/null && rustc --version | grep -q "1.9"; then
-        info "Rust 已安装: $(rustc --version)"
+    if su - "$APP_USER" -c "source \$HOME/.cargo/env 2>/dev/null && rustc --version" 2>/dev/null | grep -q "1.9"; then
+        info "Rust 已安装: $(su - $APP_USER -c 'source $HOME/.cargo/env && rustc --version')"
         return
     fi
 
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    su - "$APP_USER" -c "source \$HOME/.cargo/env && rustc --version"
+    export RUSTUP_DIST_SERVER="https://mirrors.tuna.tsinghua.edu.cn/rustup"
+    export RUSTUP_UPDATE_ROOT="https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup"
+
+    su - "$APP_USER" -c "export RUSTUP_DIST_SERVER=https://mirrors.tuna.tsinghua.edu.cn/rustup && export RUSTUP_UPDATE_ROOT=https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && source \$HOME/.cargo/env && rustc --version"
 
     info "阶段2完成"
 }
@@ -92,6 +119,7 @@ phase3_nodejs() {
         return
     fi
 
+    export DEBIAN_FRONTEND=noninteractive
     apt-get install -y -qq nodejs npm || {
         warn "系统Node.js版本可能过低，尝试NodeSource..."
         curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
@@ -157,11 +185,15 @@ phase5_build() {
     fi
 
     mkdir -p "$APP_DIR/data"
+    chown -R "$APP_USER:$APP_USER" "$APP_DIR/data"
 
-    # 配置 Cargo 镜像 (加速下载)
+    # 配置 Cargo 镜像 (加速下载，使用清华镜像)
     su - "$APP_USER" -c "mkdir -p ~/.cargo && cat > ~/.cargo/config.toml << CARGOEOF
 [source.crates-io]
-registry = \"sparse+https://index.crates.io/\"
+replace-with = \"tuna\"
+
+[source.tuna]
+registry = \"sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/\"
 
 [net]
 retry = 10
@@ -191,8 +223,8 @@ CARGOEOF"
 phase6_config() {
     info "===== 阶段6: 配置应用 ====="
 
-    if [ ! -f "$APP_DIR/config.toml" ]; then
-        cat > "$APP_DIR/config.toml" << CONFEOF
+    # 始终生成配置（覆盖 git clone 带来的默认配置）
+    cat > "$APP_DIR/config.toml" << CONFEOF
 [server]
 host = \"0.0.0.0\"
 port = $APP_PORT
@@ -219,7 +251,6 @@ level = \"info\"
 file_path = \"$APP_DIR/data/app.log\"
 CONFEOF
     chown "$APP_USER:$APP_USER" "$APP_DIR/config.toml"
-    fi
 
     info "阶段6完成"
 }
@@ -297,6 +328,9 @@ server {
 NGXEOF
 
     ln -sf /etc/nginx/sites-available/shareweb /etc/nginx/sites-enabled/shareweb
+
+    # 删除 Nginx 默认站点（避免与 shareweb 冲突）
+    rm -f /etc/nginx/sites-enabled/default
 
     nginx -t || error "Nginx 配置错误"
     systemctl enable nginx
@@ -428,6 +462,7 @@ main() {
 
     check_root
     check_debian13
+    setup_env
 
     phase1_system_deps
     phase2_rust
