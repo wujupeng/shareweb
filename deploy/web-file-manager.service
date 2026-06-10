@@ -1,0 +1,15 @@
+[Unit]
+Description=Web File Manager
+After=network.target
+
+[Service]
+Type=simple
+User=debian
+WorkingDirectory=/opt/web-file-manager
+ExecStart=/opt/web-file-manager/web-file-manager /opt/web-file-manager/config.toml
+Restart=on-failure
+RestartSec=5
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=multi-user.target

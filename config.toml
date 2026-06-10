@@ -1,0 +1,24 @@
+[server]
+host = "0.0.0.0"
+port = 8080
+workers = 4
+
+[storage]
+base_dir = "/mnt/share"
+max_file_size = 10737418240
+chunk_size = 5242880
+tmp_dir = "/tmp/upload"
+
+[database]
+path = "./data/web-file-manager.db"
+
+[auth]
+jwt_secret = "change-me-in-production"
+jwt_expiration_hours = 24
+max_login_attempts = 5
+lock_duration_minutes = 30
+bcrypt_cost = 12
+
+[log]
+level = "info"
+file_path = "/var/log/web-file-manager/app.log"

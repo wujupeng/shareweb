@@ -1,0 +1,29 @@
+[package]
+name = "web-file-manager"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+actix-web = "4"
+actix-rt = "2"
+actix-cors = "0.7"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+jsonwebtoken = "9"
+bcrypt = "0.16"
+rusqlite = { version = "0.32", features = ["bundled"] }
+uuid = { version = "1", features = ["v4"] }
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+zip = "2"
+async-compression = { version = "0.4", features = ["tokio", "gzip"] }
+toml = "0.8"
+chrono = { version = "0.4", features = ["serde"] }
+futures = "0.3"
+thiserror = "2"
+mime_guess = "2"
+urlencoding = "2"
+
+[dev-dependencies]
+actix-http = "3"
