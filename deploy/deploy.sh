@@ -332,6 +332,10 @@ NGXEOF
     # 删除 Nginx 默认站点（避免与 shareweb 冲突）
     rm -f /etc/nginx/sites-enabled/default
 
+    # 确保 Nginx (www-data) 能读取前端文件
+    chmod 755 /home/debian
+    chmod -R o+rX "$APP_DIR/frontend/dist"
+
     nginx -t || error "Nginx 配置错误"
     systemctl enable nginx
     systemctl restart nginx
