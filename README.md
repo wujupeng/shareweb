@@ -94,7 +94,7 @@ sudo bash deploy/deploy.sh
 | 1 | 系统基础依赖 | 自动切换清华 TUNA 镜像源，安装 curl/git/nginx/samba/sqlite3 等 |
 | 2 | Rust 工具链 | rustup + TUNA 镜像加速，安装 rustc 1.96+ |
 | 3 | Node.js | apt 安装 v20.x + npm |
-| 4 | SMB 共享 | 创建 /mnt/share，配置 smbpasswd，启用 smbd/nmbd |
+| 4 | SMB 共享 | 创建 /mnt/share，配置 smbpasswd，**只保留 [share] 共享**，移除默认的 [homes]/[printers]/[print$]，禁止用户自建共享 |
 | 5 | 编译构建 | git clone → cargo build --release → vite build（均使用国内镜像） |
 | 6 | 应用配置 | 生成 config.toml（随机 jwt_secret，端口 8888） |
 | 7 | systemd 服务 | Restart=always + ExecStartPre，断电自动恢复 |
@@ -250,6 +250,7 @@ curl http://127.0.0.1:88/api/health
 
 | 问题 | 原因 | 解决方案 |
 |------|------|----------|
+| SMB 暴露多余共享（homes/printers） | Debian 默认 smb.conf 含 [homes]/[printers]/[print$] | deploy.sh 覆盖 smb.conf，只保留 [share]，设置 usershare allow guests = no |
 | 上传超过 2MB 失败 | Actix-Web 默认 Payload 限制 | 已配置 PayloadConfig 为 100MB |
 | bcrypt 登录缓慢 | cost=12 计算耗时 10-30s | 正常行为，已在 Nginx 设置 proxy_read_timeout 300s |
 | Nginx 500 错误 | /home/debian 权限 750，www-data 无法读取 | deploy.sh 已执行 chmod 755 /home/debian |
