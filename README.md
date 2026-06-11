@@ -207,7 +207,7 @@ port = 8888                # 后端监听端口（Nginx 代理此端口）
 base_dir = "/mnt/share"    # 共享目录路径
 max_file_size = 10737418240 # 最大文件大小（10GB）
 chunk_size = 5242880        # 分片大小（5MB）
-tmp_dir = "/tmp/upload"     # 上传临时目录
+tmp_dir = "./data/upload_tmp" # 上传临时目录（必须在磁盘上，不能放 /tmp 即 tmpfs）
 
 [database]
 path = "./data/web-file-manager.db"
@@ -251,6 +251,7 @@ curl http://127.0.0.1:88/api/health
 | 问题 | 原因 | 解决方案 |
 |------|------|----------|
 | SMB 暴露多余共享（homes/printers） | Debian 默认 smb.conf 含 [homes]/[printers]/[print$] | deploy.sh 覆盖 smb.conf，只保留 [share]，设置 usershare allow guests = no |
+| 大文件上传 "No space left on device" | /tmp 是 tmpfs（内存盘），默认仅 2GB，无法容纳大文件分片 | tmp_dir 改为磁盘路径 ./data/upload_tmp（175GB 可用） |
 | 上传超过 2MB 失败 | Actix-Web 默认 Payload 限制 | 已配置 PayloadConfig 为 100MB |
 | bcrypt 登录缓慢 | cost=12 计算耗时 10-30s | 正常行为，已在 Nginx 设置 proxy_read_timeout 300s |
 | Nginx 500 错误 | /home/debian 权限 750，www-data 无法读取 | deploy.sh 已执行 chmod 755 /home/debian |

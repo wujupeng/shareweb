@@ -7,7 +7,7 @@ workers = 4
 base_dir = "/mnt/share"
 max_file_size = 10737418240
 chunk_size = 5242880
-tmp_dir = "/tmp/upload"
+tmp_dir = "./data/upload_tmp"
 
 [database]
 path = "./data/web-file-manager.db"

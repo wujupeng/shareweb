@@ -241,7 +241,7 @@ workers = 4
 base_dir = \"$SHARE_DIR\"
 max_file_size = 10737418240
 chunk_size = 5242880
-tmp_dir = \"/tmp/upload\"
+tmp_dir = \"$APP_DIR/data/upload_tmp\"
 
 [database]
 path = \"$APP_DIR/data/web-file-manager.db\"
@@ -278,7 +278,7 @@ Wants=network-online.target
 Type=simple
 User=$APP_USER
 WorkingDirectory=$APP_DIR
-ExecStartPre=/bin/mkdir -p $APP_DIR/data /tmp/upload
+ExecStartPre=/bin/mkdir -p $APP_DIR/data $APP_DIR/data/upload_tmp
 ExecStart=$APP_DIR/target/release/web-file-manager $APP_DIR/config.toml
 Restart=always
 RestartSec=5
