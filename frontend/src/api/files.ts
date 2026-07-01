@@ -1,3 +1,4 @@
+import { useAuthStore } from '@/stores/auth'
 import api from './index'
 
 export interface FileInfo {
@@ -43,12 +44,16 @@ export const filesApi = {
     return api.post('/files/copy', { source_path: sourcePath, target_dir: targetDir })
   },
   download(path: string) {
-    return `/api/files/download?path=${encodeURIComponent(path)}`
+    const authStore = useAuthStore()
+    const token = authStore.token || ''
+    return `/api/files/download?path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`
   },
   batchDownload(paths: string[]) {
     return api.post('/files/download/batch', { paths }, { responseType: 'blob' })
   },
   preview(path: string) {
-    return `/api/files/preview?path=${encodeURIComponent(path)}`
+    const authStore = useAuthStore()
+    const token = authStore.token || ''
+    return `/api/files/preview?path=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`
   },
 }

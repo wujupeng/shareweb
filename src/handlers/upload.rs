@@ -1,11 +1,16 @@
-use actix_web::{web, HttpResponse};
+use actix_web::{web, HttpRequest, HttpResponse};
 use serde::Deserialize;
 use std::path::Path;
+use std::sync::{Mutex, Arc};
+use rusqlite::Connection;
 use uuid::Uuid;
 use crate::error::AppError;
 use crate::services::file_service::FileService;
 use crate::utils::path_sanitizer::sanitize_path;
 use crate::config::AppConfig;
+use crate::middleware::auth::extract_token_from_header;
+use crate::services::auth_service::AuthService;
+use crate::repositories::audit_repo::AuditRepo;
 
 #[derive(Deserialize)]
 pub struct InitUploadRequest {
@@ -77,8 +82,16 @@ pub struct CompleteUploadRequest {
 pub async fn complete_upload(
     config: web::Data<AppConfig>,
     file_service: web::Data<FileService>,
+    auth_service: web::Data<AuthService>,
+    db: web::Data<Arc<Mutex<Connection>>>,
+    req: HttpRequest,
     body: web::Json<CompleteUploadRequest>,
 ) -> Result<HttpResponse, AppError> {
+    let token = extract_token_from_header(req.headers())?;
+    let claims = auth_service.verify_token(&token)?;
+    let username = claims.sub;
+    let source_ip = req.connection_info().peer_addr().unwrap_or("unknown").to_string();
+
     let safe_target = sanitize_path(&body.target_path, &file_service.base_dir)
         .map_err(|e| AppError::PathTraversal(e))?;
     let target_file = Path::new(&safe_target).join(&body.file_name);
@@ -104,6 +117,10 @@ pub async fn complete_upload(
 
     tokio::fs::remove_dir_all(&tmp_dir).await
         .map_err(|e| AppError::Internal(format!("清理临时文件失败: {}", e)))?;
+
+    if let Ok(conn) = db.lock() {
+        let _ = AuditRepo::insert(&conn, &username, "upload", Some(&body.target_path), Some(&body.file_name), &source_ip, "success", None);
+    }
 
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "code": 0,

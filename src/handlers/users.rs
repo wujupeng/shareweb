@@ -1,10 +1,12 @@
-use actix_web::{web, HttpResponse};
+use actix_web::{web, HttpRequest, HttpResponse};
 use serde::Deserialize;
 use std::sync::{Mutex, Arc};
 use rusqlite::Connection;
 use crate::error::AppError;
 use crate::repositories::user_repo::UserRepo;
 use crate::config::AppConfig;
+use crate::middleware::auth::extract_token_from_header;
+use crate::services::auth_service::AuthService;
 
 #[derive(Deserialize)]
 pub struct ListUsersQuery {
@@ -27,10 +29,22 @@ pub struct UpdateUserRequest {
     pub password: Option<String>,
 }
 
+fn require_admin(req: &HttpRequest, auth_service: &AuthService) -> Result<String, AppError> {
+    let token = extract_token_from_header(req.headers())?;
+    let claims = auth_service.verify_token(&token)?;
+    if claims.role != "admin" {
+        return Err(AppError::Forbidden("需要管理员权限".to_string()));
+    }
+    Ok(claims.sub)
+}
+
 pub async fn list_users(
     db: web::Data<Arc<Mutex<Connection>>>,
+    auth_service: web::Data<AuthService>,
+    req: HttpRequest,
     query: web::Query<ListUsersQuery>,
 ) -> Result<HttpResponse, AppError> {
+    require_admin(&req, &auth_service)?;
     let conn = db.lock().map_err(|e| AppError::Internal(e.to_string()))?;
     let page = query.page.unwrap_or(1);
     let page_size = query.page_size.unwrap_or(20);
@@ -60,8 +74,11 @@ pub async fn list_users(
 pub async fn create_user(
     db: web::Data<Arc<Mutex<Connection>>>,
     config: web::Data<AppConfig>,
+    auth_service: web::Data<AuthService>,
+    req: HttpRequest,
     body: web::Json<CreateUserRequest>,
 ) -> Result<HttpResponse, AppError> {
+    require_admin(&req, &auth_service)?;
     let conn = db.lock().map_err(|e| AppError::Internal(e.to_string()))?;
     if UserRepo::find_by_username(&conn, &body.username).map_err(|e| AppError::Internal(e.to_string()))?.is_some() {
         return Err(AppError::Conflict("用户名已存在".to_string()));
@@ -76,9 +93,12 @@ pub async fn create_user(
 
 pub async fn update_user(
     db: web::Data<Arc<Mutex<Connection>>>,
+    auth_service: web::Data<AuthService>,
+    req: HttpRequest,
     path: web::Path<String>,
     body: web::Json<UpdateUserRequest>,
 ) -> Result<HttpResponse, AppError> {
+    require_admin(&req, &auth_service)?;
     let conn = db.lock().map_err(|e| AppError::Internal(e.to_string()))?;
     let username = path.into_inner();
     let role = body.role.as_deref().unwrap_or("readonly");
@@ -95,8 +115,11 @@ pub async fn update_user(
 
 pub async fn delete_user(
     db: web::Data<Arc<Mutex<Connection>>>,
+    auth_service: web::Data<AuthService>,
+    req: HttpRequest,
     path: web::Path<String>,
 ) -> Result<HttpResponse, AppError> {
+    require_admin(&req, &auth_service)?;
     let conn = db.lock().map_err(|e| AppError::Internal(e.to_string()))?;
     let username = path.into_inner();
     let admin_count = UserRepo::count_admins(&conn).map_err(|e| AppError::Internal(e.to_string()))?;

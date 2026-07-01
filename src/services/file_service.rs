@@ -1,3 +1,4 @@
+use chrono::TimeZone;
 use std::path::Path;
 use tokio::fs;
 use crate::error::AppError;
@@ -39,6 +40,7 @@ impl FileService {
             if !show_hidden && file_name.starts_with('.') {
                 continue;
             }
+            if file_name == "lost+found" { continue; }
 
             let metadata = entry.metadata().await
                 .map_err(|e| AppError::Internal(format!("读取文件元数据失败: {}", e)))?;
@@ -48,8 +50,7 @@ impl FileService {
                 .ok()
                 .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                 .map(|d| {
-                    chrono::DateTime::from_timestamp(d.as_secs() as i64, 0)
-                        .unwrap_or_default()
+                    chrono::Local.timestamp(d.as_secs() as i64, 0)
                         .format("%Y-%m-%d %H:%M:%S")
                         .to_string()
                 })
@@ -119,6 +120,8 @@ impl FileService {
             .map_err(|e| AppError::Internal(format!("读取目录条目失败: {}", e)))? {
             let file_name = entry.file_name().to_string_lossy().to_string();
             if file_name.starts_with('.') { continue; }
+            if file_name == "lost+found" { continue; }
+            if file_name == "lost+found" { continue; }
 
             let metadata = entry.metadata().await
                 .map_err(|e| AppError::Internal(format!("读取元数据失败: {}", e)))?;
@@ -198,8 +201,7 @@ impl FileService {
                         .ok()
                         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                         .map(|d| {
-                            chrono::DateTime::from_timestamp(d.as_secs() as i64, 0)
-                                .unwrap_or_default()
+                            chrono::Local.timestamp(d.as_secs() as i64, 0)
                                 .format("%Y-%m-%d %H:%M:%S")
                                 .to_string()
                         })
