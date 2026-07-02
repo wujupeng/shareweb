@@ -22,7 +22,8 @@
 - **文件预览**：图片、文本、PDF、视频、音频在线预览
 - **权限控制**：基于角色的访问控制（RBAC）、目录级权限规则、权限继承
 - **用户管理**：用户增删改查、角色分配（管理员/读写/只读）
-- **审计日志**：操作记录查询、只追加写入
+- **审计日志**：全操作审计记录（login/download/upload/preview/mkdir/rename/delete/move/copy），含操作者、来源IP、结果
+- **安全加固**：全接口 JWT 认证、三级角色授权、目录级权限控制、路径遍历防护
 - **断电恢复**：systemd Restart=always，异常断电后开机自动恢复
 - **IP 变化检测**：cron 定时检测，IP 变更自动重启服务
 
@@ -171,21 +172,21 @@ npm run dev
 | DELETE | /api/files/delete | 删除 |
 | POST | /api/files/move | 移动 |
 | POST | /api/files/copy | 复制 |
-| GET | /api/files/download | 文件下载 |
-| POST | /api/files/download/batch | 批量下载（ZIP） |
-| GET | /api/files/preview | 文件预览 |
+| GET | /api/files/download | 文件下载（支持 ?token= 参数） |
+| POST | /api/files/download/batch | 批量下载（ZIP，需认证） |
+| GET | /api/files/preview | 文件预览（需认证+权限） |
 | POST | /api/upload/init | 初始化上传任务 |
 | POST | /api/upload/chunk | 上传分片 |
 | POST | /api/upload/complete | 完成上传 |
 | GET | /api/upload/status | 上传状态查询 |
-| GET | /api/users | 用户列表 |
-| POST | /api/users | 创建用户 |
-| PUT | /api/users/{username} | 更新用户 |
-| DELETE | /api/users/{username} | 删除用户 |
-| GET | /api/permissions | 权限规则列表 |
-| POST | /api/permissions | 创建权限规则 |
-| DELETE | /api/permissions/{id} | 删除权限规则 |
-| GET | /api/audit-logs | 审计日志查询 |
+| GET | /api/users | 用户列表（需 admin） |
+| POST | /api/users | 创建用户（需 admin） |
+| PUT | /api/users/{username} | 更新用户（需 admin） |
+| DELETE | /api/users/{username} | 删除用户（需 admin） |
+| GET | /api/permissions | 权限规则列表（需 admin） |
+| POST | /api/permissions | 创建权限规则（需 admin） |
+| DELETE | /api/permissions/{id} | 删除权限规则（需 admin） |
+| GET | /api/audit-logs | 审计日志查询（需 admin） |
 | GET | /api/health | 健康检查 |
 
 ## 默认账号
@@ -245,6 +246,41 @@ curl http://127.0.0.1:8888/api/health
 # 测试完整链路
 curl http://127.0.0.1:88/api/health
 ```
+
+## 安全加固记录
+
+### v0.2.0 安全加固（2026-07-03）
+
+| 漏洞 | 严重级别 | 修复方案 |
+|------|----------|----------|
+| preview 接口无认证，任何人可预览文件 | **严重** | 添加 JWT 认证 + 权限路径检查 + 审计日志 |
+| users/permissions/audit-logs 管理接口无认证 | **严重** | 添加 admin 角色校验，非管理员返回 403 |
+| batch_download 无认证和权限检查 | **严重** | 添加 JWT 认证 + 逐路径权限检查 + 审计日志 |
+| mkdir/rename/delete/move/copy 无权限检查 | **高危** | 添加路径权限检查 + 写入角色校验（admin/readwrite） |
+| 下载大文件 OOM（全量读入内存） | **高危** | 改为 8MB 分块流式传输，支持 Range 断点续传 |
+| 浏览器下载缺少认证头 | **中危** | download/preview URL 支持 `?token=` 查询参数 |
+| 审计日志为空（handler 未调用 AuditRepo） | **中危** | 所有 handler 操作写入审计记录（含 source_ip、failure_reason） |
+| 时间戳显示 UTC（差8小时） | **低危** | SQLite 默认值改为 `datetime('now','localtime')`，file_service 使用 Local 时区 |
+| lost+found 在 Web 和 SMB 中可见 | **低危** | file_service 过滤 + smb.conf veto files |
+| samba-ad-dc 反复覆盖 smb.conf | **低危** | mask samba-ad-dc 服务 + chattr +i 保护配置 |
+| 服务器休眠导致服务中断 | **低危** | mask sleep/suspend/hibernate + HandleLidSwitch=ignore |
+
+### 安全架构
+
+```
+请求流程：
+  浏览器 → Nginx:88 → Actix-Web:8888 → [JWT认证] → [权限检查] → [审计记录] → 业务处理
+                                                        ↓
+                                              未认证: 401 缺少认证头
+                                              无权限: 403 权限不足
+                                              只读用户写操作: 403 需要写入权限
+```
+
+- **认证**：所有 API 接口均需 JWT Bearer Token（下载/预览支持 query token 参数）
+- **授权**：三级角色（admin/readwrite/readonly），管理接口仅 admin 可访问
+- **路径权限**：基于 permission_rules 表的目录级访问控制，非 admin 用户只能看到授权路径
+- **审计**：login/download/upload/preview/mkdir/rename/delete/move/copy 全操作记录
+- **路径安全**：sanitize_path 防止路径遍历攻击，validate_filename 防止非法文件名
 
 ## 已知问题与解决方案
 
