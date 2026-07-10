@@ -5,6 +5,7 @@ use rusqlite::Connection;
 use crate::error::AppError;
 use crate::services::auth_service::AuthService;
 use crate::repositories::audit_repo::AuditRepo;
+use crate::middleware::auth::extract_token_from_header;
 
 #[derive(Deserialize)]
 pub struct LoginRequest {
@@ -57,15 +58,18 @@ pub async fn logout() -> Result<HttpResponse, AppError> {
     })))
 }
 
-pub async fn profile(req: HttpRequest) -> Result<HttpResponse, AppError> {
-    let username = req.extensions().get::<String>().cloned().unwrap_or_default();
-    let role = req.extensions().get::<String>().cloned().unwrap_or_default();
+pub async fn profile(
+    auth_service: web::Data<AuthService>,
+    req: HttpRequest,
+) -> Result<HttpResponse, AppError> {
+    let token = extract_token_from_header(req.headers())?;
+    let claims = auth_service.verify_token(&token)?;
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "code": 0,
         "message": "success",
         "data": {
-            "username": username,
-            "role": role
+            "username": claims.sub,
+            "role": claims.role
         }
     })))
 }
@@ -75,9 +79,9 @@ pub async fn change_password(
     req: HttpRequest,
     body: web::Json<ChangePasswordRequest>,
 ) -> Result<HttpResponse, AppError> {
-    let username = req.extensions().get::<String>().cloned()
-        .ok_or_else(|| AppError::Unauthorized("未认证".to_string()))?;
-    auth_service.change_password(&username, &body.old_password, &body.new_password)?;
+    let token = extract_token_from_header(req.headers())?;
+    let claims = auth_service.verify_token(&token)?;
+    auth_service.change_password(&claims.sub, &body.old_password, &body.new_password)?;
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "code": 0,
         "message": "密码修改成功"
